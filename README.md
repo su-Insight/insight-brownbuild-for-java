@@ -37,7 +37,7 @@ cd execute
 java -jar VocabularyExtract-jar-with-dependencies.jar 5 ../dataset/graphviz/ ../dataset/graphviz_extracted/
 ```
 
-> **java -jar <jarName> <proc> <pathIn> <pathOut>**
+> **java -jar \<jarName\> \<proc\> \<pathIn\> \<pathOut\>**
 >
 > The meanings of the three parameters are as follows:
 >
