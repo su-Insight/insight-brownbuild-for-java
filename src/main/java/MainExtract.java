@@ -234,7 +234,7 @@ public class MainExtract {
             // 等待所有线程完成
             latch.await();
             stopWatch.stop();
-            System.out.println("Done:"+pathOut);
+            System.out.println("\nDone:"+pathOut);
             System.out.println("--- " + durationTimeFormat(stopWatch.getTime()) + "--- ");
         } catch (InterruptedException e) {
             e.printStackTrace();
