@@ -23,6 +23,13 @@ import static org.apache.commons.lang.time.DurationFormatUtils.formatDuration;
  * @version: 1.0
  */
 public class MainExtract {
+    // MODE:
+    // 0 => Verbose mode(default):show files' name and number processed;
+    // 1 => Minimal mode:only show the process bar
+    public static int mode = 0;
+    public static long totalFile = 1;
+    public static long completedFile = 0;
+    public static int percentage = -1;
     public static final String fileRegex = ".*[\\/]((.*_.*_.*_.*_.*_.*)_(.*)_(.*)_([01])(_(.*))?)(-processed)?\\.log";
     public static final String[] stopWords = new String[]{"a", "about", "above", "above", "across", "after", "afterwards", "again", "against", "all", "almost", "alone", "along", "already", "also", "although", "always", "am", "among", "amongst", "amoungst", "amount", "an", "and", "another", "any", "anyhow", "anyone", "anything", "anyway", "anywhere", "are", "around", "as", "at", "back", "be", "became", "because", "become", "becomes", "becoming", "been", "before", "beforehand", "behind", "being", "below", "beside", "besides", "between", "beyond", "bill", "both", "bottom", "but", "by", "call", "can", "cannot", "cant", "co", "con", "could", "couldnt", "cry", "de", "describe", "detail", "do", "done", "down", "due", "during", "each", "eg", "eight", "either", "eleven", "else", "elsewhere", "empty", "enough", "etc", "even", "ever", "every", "everyone", "everything", "everywhere", "except", "few", "fifteen", "fify", "fill", "find", "fire", "first", "five", "for", "former", "formerly", "forty", "found", "four", "from", "front", "full", "further", "get", "give", "go", "had", "has", "hasnt", "have", "he", "hence", "her", "here", "hereafter", "hereby", "herein", "hereupon", "hers", "herself", "him", "himself", "his", "how", "however", "hundred", "ie", "if", "in", "inc", "indeed", "interest", "into", "is", "it", "its", "itself", "keep", "last", "latter", "latterly", "least", "less", "ltd", "made", "many", "may", "me", "meanwhile", "might", "mill", "mine", "more", "moreover", "most", "mostly", "move", "much", "must", "my", "myself", "name", "namely", "neither", "never", "nevertheless", "next", "nine", "no", "nobody", "none", "noone", "nor", "not", "nothing", "now", "nowhere", "of", "off", "often", "on", "once", "one", "only", "onto", "or", "other", "others", "otherwise", "our", "ours", "ourselves", "out", "over", "own", "part", "per", "perhaps", "please", "put", "rather", "re", "same", "see", "seem", "seemed", "seeming", "seems", "serious", "several", "she", "should", "show", "side", "since", "sincere", "six", "sixty", "so", "some", "somehow", "someone", "something", "sometime", "sometimes", "somewhere", "still", "such", "system", "take", "ten", "than", "that", "the", "their", "them", "themselves", "then", "thence", "there", "thereafter", "thereby", "therefore", "therein", "thereupon", "these", "they", "thick", "thin", "third", "this", "those", "though", "three", "through", "throughout", "thru", "thus", "to", "together", "too", "top", "toward", "towards", "twelve", "twenty", "two", "un", "under", "until", "up", "upon", "us", "very", "via", "was", "we", "well", "were", "what", "whatever", "when", "whence", "whenever", "where", "whereafter", "whereas", "whereby", "wherein", "whereupon", "wherever", "whether", "which", "while", "whither", "who", "whoever", "whole", "whom", "whose", "why", "will", "with", "within", "without", "would", "yet", "you", "your", "yours", "yourself", "yourselves", "the"};
 
@@ -55,14 +62,21 @@ public class MainExtract {
                 try {
                     // 从阻塞队列中获取文件名
                     if (files.isEmpty()){
-                        System.out.println("Thread "+ Thread.currentThread().getName() +" has processed.");
-                        // 处理完成后，调用 countDown() 方法来减少计数
+                        if(mode == 0){
+                            System.out.println("Thread "+ Thread.currentThread().getName() +" has processed.");
+                        }
                         latch.countDown();
                         break;
                     }
                     String fileName = files.take(); // 如果队列为空，会阻塞等待文件名
-                    // 处理文件的操作
-                    System.out.println("File " + fileName + " is processing by thread: " + Thread.currentThread().getName());
+                    if (mode == 0){
+                        System.out.print("File " + fileName + " is processing by thread: " + Thread.currentThread().getName());
+                        System.out.print("   ");
+                        System.out.print(++completedFile);
+                        System.out.print("/");
+                        System.out.println(totalFile);
+                    }
+
                     String content = getFileContent(fileName);
 
                     Pattern pattern = Pattern.compile(fileRegex);
@@ -85,8 +99,6 @@ public class MainExtract {
                         }
                     }
 
-                    ArrayList<String> hot = new ArrayList<>(Arrays.asList(new String[]{"remov", "distdir", "skip", "length"}));
-
                     int ngram = 2;
                     String newContent = wordCount(redWords, ngram);
                     Path path = Paths.get(pathOut);
@@ -103,6 +115,11 @@ public class MainExtract {
                     permissions.add(PosixFilePermission.OWNER_WRITE);
                     permissions.add(PosixFilePermission.OWNER_EXECUTE);
                     Files.setPosixFilePermissions(writePath, permissions);
+
+                    if (mode == 1){
+                        completedFile++;
+                        upProgress();
+                    }
 
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -183,13 +200,42 @@ public class MainExtract {
         }
         return retString;
     }
+    public synchronized static void upProgress(){
+        if (percentage == (int) (completedFile * 100 / totalFile)){
+            return;
+        }else {
+            percentage = (int) (completedFile * 100 / totalFile);
+            System.out.print("[");
+            for (int i = 1; i <= percentage; i+=2) {
+                System.out.print("█");
+            }
+            for (int i = 1; i < 100-percentage; i+=2) {
+                System.out.print(" ");
+            }
+            System.out.print("]  " + percentage + "%   \r");
+        }
+
+    }
+
     public static void main(String[] args){
         if (args.length < 3){
             throw new IllegalArgumentException("the command line parameter format is incorrect");
+        } else if (args.length > 3) {
+            if (args[3].equals("-v")){
+                mode = 0;
+            }else if (args[3].equals("-m")){
+                mode= 1;
+            }else {
+                throw new IllegalArgumentException("the command line parameter format is incorrect");
+            }
         }
         int proc = Integer.parseInt(args[0]);
         String pathIn = args[1];
         String pathOut = args[2];
+
+
+
+        totalFile = new File(pathIn).list().length;
 
         if (!pathIn.endsWith(File.separator)){
             pathIn += File.separator;
@@ -227,14 +273,11 @@ public class MainExtract {
             executorService.submit(new ProcessFilesTask(latch, files, applicableRegexes, pathOut));
         }
 
-
-
-
         try {
             // 等待所有线程完成
             latch.await();
             stopWatch.stop();
-            System.out.println("\nDone:"+pathOut);
+            System.out.println("\n\nDone:"+pathOut);
             System.out.println("--- " + durationTimeFormat(stopWatch.getTime()) + "--- ");
         } catch (InterruptedException e) {
             e.printStackTrace();
