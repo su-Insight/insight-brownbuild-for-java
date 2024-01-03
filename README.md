@@ -10,7 +10,7 @@ This is a Java project managed using `Maven`. To use and execute this project, y
 
 ## Dataset
 
- To be able to run the script, you should have a folder containing job logs with title:
+To be able to run the script, you should have a folder containing job logs with title:
 
 `{builddate}_{buildid}_{commitid}_{classification}_{buildname}.log`
 
@@ -36,7 +36,7 @@ You can explicitly specify them via the command line by `-m` and `-v` when you e
 
 ## Vocabulary extraction
 
-The vocabulary extraction is done using the `MainExtract.class` file. 
+The vocabulary extraction is done using the `MainExtract.class` file.
 
 Certainly! You have two options to execute:
 
