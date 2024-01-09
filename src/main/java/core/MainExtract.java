@@ -1,9 +1,10 @@
-import org.apache.commons.lang.time.StopWatch;
+package core;
 
-import java.io.BufferedReader;
+import org.apache.commons.cli.*;
+import tool.Stemmer;
+import tool.Timer;
+
 import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -13,7 +14,8 @@ import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.apache.commons.lang.time.DurationFormatUtils.formatDuration;
+import static tool.File.getFileContent;
+import static tool.File.getPathFiles;
 
 
 /**
@@ -26,13 +28,15 @@ public class MainExtract {
     // MODE:
     // 0 => Verbose mode(default):show files' name and number processed;
     // 1 => Minimal mode:only show the process bar
-    public static int mode = 0;
-    public static long totalFile = 1;
-    public static long completedFile = 0;
-    public static int percentage = -1;
-    public static final String fileRegex = ".*[\\/]((.*_.*_.*_.*_.*_.*)_(.*)_(.*)_([01])(_(.*))?)(-processed)?\\.log";
-    public static final String[] stopWords = new String[]{"a", "about", "above", "above", "across", "after", "afterwards", "again", "against", "all", "almost", "alone", "along", "already", "also", "although", "always", "am", "among", "amongst", "amoungst", "amount", "an", "and", "another", "any", "anyhow", "anyone", "anything", "anyway", "anywhere", "are", "around", "as", "at", "back", "be", "became", "because", "become", "becomes", "becoming", "been", "before", "beforehand", "behind", "being", "below", "beside", "besides", "between", "beyond", "bill", "both", "bottom", "but", "by", "call", "can", "cannot", "cant", "co", "con", "could", "couldnt", "cry", "de", "describe", "detail", "do", "done", "down", "due", "during", "each", "eg", "eight", "either", "eleven", "else", "elsewhere", "empty", "enough", "etc", "even", "ever", "every", "everyone", "everything", "everywhere", "except", "few", "fifteen", "fify", "fill", "find", "fire", "first", "five", "for", "former", "formerly", "forty", "found", "four", "from", "front", "full", "further", "get", "give", "go", "had", "has", "hasnt", "have", "he", "hence", "her", "here", "hereafter", "hereby", "herein", "hereupon", "hers", "herself", "him", "himself", "his", "how", "however", "hundred", "ie", "if", "in", "inc", "indeed", "interest", "into", "is", "it", "its", "itself", "keep", "last", "latter", "latterly", "least", "less", "ltd", "made", "many", "may", "me", "meanwhile", "might", "mill", "mine", "more", "moreover", "most", "mostly", "move", "much", "must", "my", "myself", "name", "namely", "neither", "never", "nevertheless", "next", "nine", "no", "nobody", "none", "noone", "nor", "not", "nothing", "now", "nowhere", "of", "off", "often", "on", "once", "one", "only", "onto", "or", "other", "others", "otherwise", "our", "ours", "ourselves", "out", "over", "own", "part", "per", "perhaps", "please", "put", "rather", "re", "same", "see", "seem", "seemed", "seeming", "seems", "serious", "several", "she", "should", "show", "side", "since", "sincere", "six", "sixty", "so", "some", "somehow", "someone", "something", "sometime", "sometimes", "somewhere", "still", "such", "system", "take", "ten", "than", "that", "the", "their", "them", "themselves", "then", "thence", "there", "thereafter", "thereby", "therefore", "therein", "thereupon", "these", "they", "thick", "thin", "third", "this", "those", "though", "three", "through", "throughout", "thru", "thus", "to", "together", "too", "top", "toward", "towards", "twelve", "twenty", "two", "un", "under", "until", "up", "upon", "us", "very", "via", "was", "we", "well", "were", "what", "whatever", "when", "whence", "whenever", "where", "whereafter", "whereas", "whereby", "wherein", "whereupon", "wherever", "whether", "which", "while", "whither", "who", "whoever", "whole", "whom", "whose", "why", "will", "with", "within", "without", "would", "yet", "you", "your", "yours", "yourself", "yourselves", "the"};
-
+    private static int mode = 0;
+    private static long totalFile = 1;
+    private static long completedFile = 0;
+    private static int percentage = -1;
+    private static final String fileRegex = ".*[\\/]((.*_.*_.*_.*_.*_.*)_(.*)_(.*)_([01])(_(.*))?)(-processed)?\\.log";
+    private static final String[] stopWords = new String[]{"a", "about", "above", "above", "across", "after", "afterwards", "again", "against", "all", "almost", "alone", "along", "already", "also", "although", "always", "am", "among", "amongst", "amoungst", "amount", "an", "and", "another", "any", "anyhow", "anyone", "anything", "anyway", "anywhere", "are", "around", "as", "at", "back", "be", "became", "because", "become", "becomes", "becoming", "been", "before", "beforehand", "behind", "being", "below", "beside", "besides", "between", "beyond", "bill", "both", "bottom", "but", "by", "call", "can", "cannot", "cant", "co", "con", "could", "couldnt", "cry", "de", "describe", "detail", "do", "done", "down", "due", "during", "each", "eg", "eight", "either", "eleven", "else", "elsewhere", "empty", "enough", "etc", "even", "ever", "every", "everyone", "everything", "everywhere", "except", "few", "fifteen", "fify", "fill", "find", "fire", "first", "five", "for", "former", "formerly", "forty", "found", "four", "from", "front", "full", "further", "get", "give", "go", "had", "has", "hasnt", "have", "he", "hence", "her", "here", "hereafter", "hereby", "herein", "hereupon", "hers", "herself", "him", "himself", "his", "how", "however", "hundred", "ie", "if", "in", "inc", "indeed", "interest", "into", "is", "it", "its", "itself", "keep", "last", "latter", "latterly", "least", "less", "ltd", "made", "many", "may", "me", "meanwhile", "might", "mill", "mine", "more", "moreover", "most", "mostly", "move", "much", "must", "my", "myself", "name", "namely", "neither", "never", "nevertheless", "next", "nine", "no", "nobody", "none", "noone", "nor", "not", "nothing", "now", "nowhere", "of", "off", "often", "on", "once", "one", "only", "onto", "or", "other", "others", "otherwise", "our", "ours", "ourselves", "out", "over", "own", "part", "per", "perhaps", "please", "put", "rather", "re", "same", "see", "seem", "seemed", "seeming", "seems", "serious", "several", "she", "should", "show", "side", "since", "sincere", "six", "sixty", "so", "some", "somehow", "someone", "something", "sometime", "sometimes", "somewhere", "still", "such", "system", "take", "ten", "than", "that", "the", "their", "them", "themselves", "then", "thence", "there", "thereafter", "thereby", "therefore", "therein", "thereupon", "these", "they", "thick", "thin", "third", "this", "those", "though", "three", "through", "throughout", "thru", "thus", "to", "together", "too", "top", "toward", "towards", "twelve", "twenty", "two", "un", "under", "until", "up", "upon", "us", "very", "via", "was", "we", "well", "were", "what", "whatever", "when", "whence", "whenever", "where", "whereafter", "whereas", "whereby", "wherein", "whereupon", "wherever", "whether", "which", "while", "whither", "who", "whoever", "whole", "whom", "whose", "why", "will", "with", "within", "without", "would", "yet", "you", "your", "yours", "yourself", "yourselves", "the"};
+    private static String pathIn = "";
+    private static String pathOut = "";
+    private static int proc = 2;
     static class ApplicableRegex{
         Pattern regex;
         String replacement;
@@ -91,7 +95,7 @@ public class MainExtract {
 
                     // 待处理文本
                     String[] processingWords = content.toLowerCase().split("\\s+");
-                    List<String> words = stemmer(processingWords);
+                    List<String> words = Stemmer.batchStemmer(processingWords);
                     List<String> redWords = new ArrayList<>();
                     for (String word : words){
                         if (!contains(stopWords, word.toLowerCase()) && word.length() > 2){
@@ -131,39 +135,6 @@ public class MainExtract {
 
     public static Boolean contains(String[] strings, String string){
         return Arrays.asList(strings).contains(string);
-    }
-
-    public static List<String> getPathFiles(String pathIn){
-        return Arrays.asList(Objects.requireNonNull(new File(pathIn).list()));
-    }
-
-    public static String durationTimeFormat(long durationMills){
-        return formatDuration(durationMills, "H'h'mm'm'ss.SSS's'");
-    }
-    public static String getFileContent(String filePath){
-        StringBuilder content = new StringBuilder();
-        try {
-            // 创建一个 BufferedReader 对象来读取文件
-            BufferedReader reader = new BufferedReader(new FileReader(filePath));
-            // 读取文件内容并存储到字符串中
-            String line;
-            while ((line = reader.readLine()) != null) {
-                content.append(line).append("\n"); // 逐行添加到StringBuilder
-            }
-            // 关闭文件流
-            reader.close();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        return content.toString();
-    }
-
-    public static List<String> stemmer(String[] processingWords) throws IOException {
-        List<String> words = new ArrayList<>();
-        for (String word : processingWords) {
-            words.add(Stemmer.stemmer(word));
-        }
-        return words;
     }
 
     public static String wordCount2String(Map<String, Integer> wordMap){
@@ -217,32 +188,37 @@ public class MainExtract {
 
     }
 
+    public static void extractArgs(String[] args){
+        Options options = new Options();
+        options.addRequiredOption("proc", null, true, "Number of threads");
+
+        options.addRequiredOption("path", null, true, "Input path containing log files.");
+        options.addRequiredOption("out", null, true, "File path for the output of vocabulary extraction");
+        options.addOption("m", "minimal", false, "Use Minimal mode");
+
+        CommandLineParser parser = new DefaultParser();
+        HelpFormatter formatter = new HelpFormatter();
+        CommandLine cmd;
+        try {
+            cmd = parser.parse(options, args);
+
+            proc = Integer.parseInt(cmd.getOptionValue("proc"));
+            pathIn = cmd.getOptionValue("path");
+            pathOut = cmd.getOptionValue("out");
+            mode = cmd.hasOption("m") ? 1 : 0;
+        }catch (ParseException e) {
+            System.out.println(e.getMessage());
+            formatter.printHelp("java -jar <jarName>", options);
+            System.exit(1);
+        }
+    }
+
     public static void main(String[] args){
-        if (args.length < 3){
-            throw new IllegalArgumentException("the command line parameter format is incorrect");
-        } else if (args.length > 3) {
-            if (args[3].equals("-v")){
-                mode = 0;
-            }else if (args[3].equals("-m")){
-                mode= 1;
-            }else {
-                throw new IllegalArgumentException("the command line parameter format is incorrect");
-            }
-        }
-        int proc = Integer.parseInt(args[0]);
-        String pathIn = args[1];
-        String pathOut = args[2];
+        extractArgs(args);
 
+        totalFile = Objects.requireNonNull(new File(pathIn).list()).length;
 
-
-        totalFile = new File(pathIn).list().length;
-
-        if (!pathIn.endsWith(File.separator)){
-            pathIn += File.separator;
-        }
-
-        StopWatch stopWatch = new StopWatch();
-        stopWatch.start();
+        long start = System.currentTimeMillis();
 
         String[] regexes = new String[]{"\n", " ", "https?://[^\\s]+", "hypothesisurlforge", "[^\\s]+[/\\\\][^\\s]+", "hypothesispathforge", "[^\\s]+\\.[^\\s]+", "hypothesispathforge", "[\\d\\w]*\\w\\d[\\d\\w]*", "hypothesisnumletforge", "[\\d\\w]+\\d\\w[\\d\\w]*", "hypothesisnumletforge", "[_\\W]+", " ", "([A-Z]+)", " $1"};
 
@@ -260,6 +236,10 @@ public class MainExtract {
         List<String> filesOnDisk = getPathFiles(pathIn);
 
         try {
+            // 检查文件分隔符，防止拼接出现错误
+            if (!pathIn.endsWith(File.separator)){
+                pathIn += File.separator;
+            }
             // 将文件名放入阻塞队列中
             for (String fileName : filesOnDisk) {
                 files.put(pathIn + fileName);
@@ -276,9 +256,8 @@ public class MainExtract {
         try {
             // 等待所有线程完成
             latch.await();
-            stopWatch.stop();
-            System.out.println("\n\nDone:"+pathOut);
-            System.out.println("--- " + durationTimeFormat(stopWatch.getTime()) + "--- ");
+            System.out.println("\n\nDone:" + pathOut);
+            System.out.println("--- " + Timer.durationTimeFormat(System.currentTimeMillis() - start) + "--- ");
         } catch (InterruptedException e) {
             e.printStackTrace();
         }

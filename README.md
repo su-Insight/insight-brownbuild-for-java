@@ -32,11 +32,11 @@ The project offers two display modes to showcase the processing procedure: Verbo
 >
 > **Minimal mode:** Only display the progress of file processing using a progress bar.
 
-You can explicitly specify them via the command line by `-m` and `-v` when you execute the program. If omitted, it represents the Verbose mode.
+You can exchange into Minimal mode via the command line by `-m|--Minimal`  when you execute the program. If omitted, it represents the Verbose mode.
 
 ## Vocabulary extraction
 
-The vocabulary extraction is done using the `MainExtract.class` file.
+The vocabulary extraction is done using the `insight.core.MainExtract.class` file.
 
 Certainly! You have two options to execute:
 
@@ -44,7 +44,7 @@ Certainly! You have two options to execute:
 
 ```shell
 cd execute
-java -jar VocabularyExtract-jar-with-dependencies.jar 5 ../dataset/graphviz/ ../dataset/graphviz_extracted/ -m
+java -jar VocabularyExtract-jar-with-dependencies.jar -proc 5 -path ../dataset/graphviz/ -out ../dataset/graphviz_extracted/ -m
 ```
 
 > **java -jar \<jarName\> \<proc\> \<pathIn\> \<pathOut\> [mode]**
@@ -54,14 +54,14 @@ java -jar VocabularyExtract-jar-with-dependencies.jar 5 ../dataset/graphviz/ ../
 > - **processor:** The number of threads.
 > - **pathIn:** The input path containing log files.
 > - **pathOut: **The file path for the output of vocabulary extraction.
-> - **mode:** The display modes to showcase the processing procedure,`-v`for Verbose mode and `-m`for Minimal mode.
+> - **mode:** The display modes to showcase the processing procedure, ignore for Verbose mode, `-m|--Minimal`for Minimal mode.
 
 **Building with Maven:** Alternatively, you can build and run the project using the `mvn` command in a Maven environment.
 
 ```shell
 mvn package	 # execute the command in the path to pom.xml file.
 cd target
-java -jar VocabularyExtract-jar-with-dependencies.jar 5 ../dataset/graphviz/ ../dataset/graphviz_extracted/
+java -jar VocabularyExtract-jar-with-dependencies.jar -proc 5 -path ../dataset/graphviz/ -out ../dataset/graphviz_extracted/
 ```
 
 Output:

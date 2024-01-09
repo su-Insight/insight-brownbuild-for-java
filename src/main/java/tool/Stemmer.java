@@ -1,4 +1,4 @@
-
+package tool;
 /*
 
    Porter stemmer in Java. The original paper is in
@@ -33,17 +33,19 @@
 
 */
 
-import java.io.*;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Stemmer, implementing the Porter Stemming Algorithm
+ * tool.Stemmer, implementing the Porter Stemming Algorithm
  *
- * The Stemmer class transforms a word into its root form.  The input
+ * The tool.Stemmer class transforms a word into its root form.  The input
  * word can be provided a character at time (by calling add()), or at once
  * by calling one of the various stem(something) methods.
  */
 
-class Stemmer
+public class Stemmer
 {  private char[] b;
     private int i,     /* offset into b */
             i_end, /* offset to end of stemmed word */
@@ -348,7 +350,7 @@ class Stemmer
         if (b[k] == 'l' && doublec(k) && m() > 1) k--;
     }
 
-    /** Stem the word placed into the Stemmer buffer through calls to add().
+    /** Stem the word placed into the tool.Stemmer buffer through calls to add().
      * Returns true if the stemming process resulted in a word different
      * from the input.  You can retrieve the result with
      * getResultLength()/getResultBuffer() or toString().
@@ -359,11 +361,11 @@ class Stemmer
         i_end = k+1; i = 0;
     }
 
-    /** Test program for demonstrating the Stemmer.  It reads text from a
+    /** Test program for demonstrating the tool.Stemmer.  It reads text from a
      * a list of files, stems each word, and writes the result to standard
      * output. Note that the word stemmed is expected to be in lower case:
-     * forcing lower case must be done outside the Stemmer class.
-     * Usage: Stemmer file-name file-name ...
+     * forcing lower case must be done outside the tool.Stemmer class.
+     * Usage: tool.Stemmer file-name file-name ...
      */
     public static String stemmer(String word){
         char[] c = word.toCharArray();
@@ -373,5 +375,13 @@ class Stemmer
         }
         stemmer.stem();
         return stemmer.toString();
+    }
+
+    public static List<String> batchStemmer(String[] processingWords) throws IOException {
+        List<String> words = new ArrayList<>();
+        for (String word : processingWords) {
+            words.add(Stemmer.stemmer(word));
+        }
+        return words;
     }
 }
