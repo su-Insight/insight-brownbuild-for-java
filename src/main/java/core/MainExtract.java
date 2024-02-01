@@ -81,8 +81,8 @@ public class MainExtract {
                         System.out.println(totalFile);
                     }
 
-                    String content = getFileContent(fileName);
-
+                    StringBuffer content = getFileContent(fileName);
+                    String con = "";
                     Pattern pattern = Pattern.compile(fileRegex);
                     Matcher matcher = pattern.matcher(fileName);
                     if (!matcher.find()){
@@ -90,11 +90,11 @@ public class MainExtract {
                     }
 
                     for(ApplicableRegex applicableRegex : applicableRegexes){
-                        content = applicableRegex.regex.matcher(content).replaceAll(applicableRegex.replacement);
+                        con = applicableRegex.regex.matcher(content.toString()).replaceAll(applicableRegex.replacement);
                     }
 
                     // 待处理文本
-                    String[] processingWords = content.toLowerCase().split("\\s+");
+                    String[] processingWords = con.toLowerCase().split("\\s+");
                     List<String> words = Stemmer.batchStemmer(processingWords);
                     List<String> redWords = new ArrayList<>();
                     for (String word : words){
@@ -122,7 +122,7 @@ public class MainExtract {
 
                     if (mode == 1){
                         completedFile++;
-                        upProgress();
+                        percentage = upProgress(percentage, totalFile, percentage);
                     }
 
                 } catch (Exception e) {
@@ -171,9 +171,9 @@ public class MainExtract {
         }
         return retString;
     }
-    public synchronized static void upProgress(){
+    public synchronized static int upProgress(long completedFile, long totalFile, int percentage){
         if (percentage == (int) (completedFile * 100 / totalFile)){
-            return;
+            return percentage;
         }else {
             percentage = (int) (completedFile * 100 / totalFile);
             System.out.print("[");
@@ -184,8 +184,11 @@ public class MainExtract {
                 System.out.print(" ");
             }
             System.out.print("]  " + percentage + "%   \r");
+            if (percentage == 100) {
+                return -1;
+            }
+            return percentage;
         }
-
     }
 
     public static void extractArgs(String[] args){
