@@ -1,12 +1,18 @@
 package tool;
 
+import base.DataFrame;
+import base.Experiment;
+
 import java.io.*;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Map;
 
+import static tool.File.checkAndMkdir;
+import static tool.File.checkAndTouch;
 import static tool.Timer.durationTimeFormat;
 
 /**
@@ -16,8 +22,9 @@ import static tool.Timer.durationTimeFormat;
  * @Version: 1.0
  */
 public class PickCall {
-    public static void serialize(Object data, String fileName){
+    public static <T> void serialize(T data, String fileName){
         try {
+            checkAndTouch(fileName);
             FileOutputStream fileOut = new FileOutputStream(fileName);
             ObjectOutputStream objectOut = new ObjectOutputStream(fileOut);
             objectOut.writeObject(data);
@@ -26,16 +33,16 @@ public class PickCall {
         }
     }
 
-    public static Object deserialize(String fileName){
-        Object obj = null;
+    public static <T> T deserialize(String fileName){
+        T data = null;
         try {
             FileInputStream fileIn = new FileInputStream(fileName);
             ObjectInputStream objectInputStream = new ObjectInputStream(fileIn);
-            obj = objectInputStream.readObject();
+            data = (T) objectInputStream.readObject();
         } catch (IOException | ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
-        return obj;
+        return data;
     }
 
     /**
@@ -48,19 +55,25 @@ public class PickCall {
      * @Return void
      * @Since version 1.0
      */
-    public static Object runAndSerialize(Class cla, Method method, Map<String, Object> args, String fileName, boolean recompute) throws InvocationTargetException, IllegalAccessException {
+    public static <T> T runAndSerialize(Class<?> cla, Method method, Object[] args, String fileName, boolean recompute) throws InvocationTargetException, IllegalAccessException, NoSuchMethodException, InstantiationException {
         long start = System.currentTimeMillis();
-        Object obj = new Object();
+        T res;
         System.out.print("Load " + fileName + " ... ");
         if (!recompute && Files.exists(Paths.get(fileName))){
-            obj = deserialize(fileName);
+            res = deserialize(fileName);
         }else {
+            Object instance = null;  // 默认情况下初始化为 null
+            // 如果方法不是静态的，创建类的实例
+            if (!Modifier.isStatic(method.getModifiers())) {
+                instance = cla.getDeclaredConstructor().newInstance();
+            }
+
             System.out.print("(computing) ...");
-            Object object = method.invoke(cla, args);
-            serialize(object, fileName);
+            res = (T) method.invoke(instance, args);
+            serialize(res, fileName);
         }
-        System.out.print("Done in " + durationTimeFormat(System.currentTimeMillis() - start) + " sec");
-        return obj;
+        System.out.println("Done in " + durationTimeFormat(System.currentTimeMillis() - start));
+        return res;
     }
 
     public static void main(String[] args) throws NoSuchMethodException {

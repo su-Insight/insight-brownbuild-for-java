@@ -1,6 +1,9 @@
 package preprocessing;
 
 import base.DataFrame;
+import base.Group;
+import base.Row;
+import base.Title;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -9,6 +12,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static base.DataFrame.getGroupedAverage;
+import static core.MainExtract.upProgress;
 import static tool.File.getFileContent;
 import static tool.File.getPathFiles;
 
@@ -22,6 +27,7 @@ public class GetData {
     private static int MAX_NGRAM = 2;
     private static String fileRegex = "((.*_.*_.*_.*_.*_.*)_(.*)_(.*)_([01])(_(.*))?)-processed\\.csv";
     private static String dateRegex = "yyyy_MM_dd_HH_mm_ss";
+    private static int percentage = -1;
     /**
      * @Author Insight
      * @Date 2024/1/7 下午5:44
@@ -31,15 +37,16 @@ public class GetData {
      * @Since version 1.0
      */
     public static Map<Integer, Map<String, Integer>> getTextCount(String filePath){
-        String text = getFileContent(filePath);
-        String[] texts = text.split("#");
+        StringBuffer text = getFileContent(filePath);
+        String[] texts = text.toString().split("#");
         List<String> separateText = new ArrayList<>();
         for (String txt : texts){
             if (!"".equals(txt)){
                 separateText.add(txt);
             }
         }
-        separateText = separateText.subList(0, MAX_NGRAM);
+
+        separateText = separateText.subList(0, Math.min(separateText.size(), MAX_NGRAM));
 
         Map<Integer, Map<String, Integer>> dic = new HashMap<>(MAX_NGRAM);
         int count = 0;
@@ -63,10 +70,10 @@ public class GetData {
      * @Return Returns a list representation of the job given in the file with filename 'file' at the path 'pathData'.
      * @Since version 1.0
      */
-    public static List<Object> getLogData(String fileName, String pathData) throws ParseException {
+    public static Row getLogData(String fileName, String pathData) throws ParseException {
         Pattern pattern = Pattern.compile(fileRegex);
         Matcher matcher = pattern.matcher(fileName);
-        List<Object> loc = new ArrayList<>();
+        Row loc = new Row();
         if (matcher.find()){
             Map<Integer, Map<String, Integer>> word_count = getTextCount(pathData + fileName);
             Date date = new SimpleDateFormat(dateRegex).parse(matcher.group(2));
@@ -104,39 +111,33 @@ public class GetData {
      * @Return modified dataset in a dataframe format, with added 'flaky' column.
      * @Since version 1.0
      */
-    public static DataFrame flakyStateAll(DataFrame dataFrame, List<List<Object>> originalData, List<String> colNames){
+    public static void flakyStateAll(DataFrame dataFrame, List<String> colNames){
         List<String> groupByList = Arrays.asList("commitID", "jobName");
 
-        Map<List<String>, List<List<Object>>> groupedData = dataFrame.groupByColumns(groupByList, originalData);
-        Map<List<String>, Float> computeJobMeanStatus = dataFrame.getGroupedAverage(groupedData, "status");
-        // groupedData.forEach((group, groupList) -> {
-        //     System.out.println(group);
-        //     System.out.println(groupList.size());
-        //     System.out.println(groupList.toString());
-        // });
+        Map<Group, List<Row>> groupedData = dataFrame.groupByColumns(groupByList);
+        Map<Group, Float> computeJobMeanStatus = getGroupedAverage(dataFrame.getColumnNames(), groupedData, "status");
 
-        Map<List<String>, String> computeJobFlakyState = new HashMap<>();
+        Map<Group, String> computeJobFlakyState = new HashMap<>();
         computeJobMeanStatus.forEach((group, mean) -> {
             computeJobFlakyState.put(group, flakyState(mean));
         });
 
         List<Object> allFlakyStateRes = new ArrayList<>();
 
-        List<Integer> indexs = new ArrayList<>(groupByList.size());
+        List<Integer> indexes = new ArrayList<>(groupByList.size());
         for (String column : groupByList){
-            indexs.add(colNames.indexOf(column) + 1);
+            indexes.add(colNames.indexOf(column) + 1);
         }
 
         List<Object> extractedList = null;
-        for (List<Object> row : originalData){
-            extractedList = indexs.stream()
+        for (Row row : dataFrame.getColumnData()){
+            extractedList = indexes.stream()
                     .map(position -> row.get(position - 1)) // 索引从1开始
                     .collect(Collectors.toList());
             allFlakyStateRes.add(computeJobFlakyState.get(extractedList));
         }
 
         dataFrame.addColumn("flaky", allFlakyStateRes);
-        return dataFrame;
     }
     /**
      * @Author Insight 
@@ -147,27 +148,28 @@ public class GetData {
      * @Since version 1.0
      */
     public static DataFrame getData(String pathData) throws ParseException {
-        List<List<Object>> res = new ArrayList<>();
+        List<Row> res = new ArrayList<>();
         List<String> logFiles = getPathFiles(pathData).stream().sorted().collect(Collectors.toList());
         Pattern pattern = Pattern.compile(fileRegex);
+        long total = logFiles.size();
+        int index = 0;
         for (String file : logFiles){
             if (pattern.matcher(file).find()){
-                res.add(getLogData(file, pathData));
+                percentage = upProgress(++index, total, percentage);
+                Row line = getLogData(file, pathData);
+                res.add(line);
             }
         }
 
-        List<String> colNames = new ArrayList<>(Arrays.asList("date", "jobID", "commitID", "status", "jobName", "filename"));
+        Title colNames = new Title();
+        colNames.addAll(Arrays.asList("date", "jobID", "commitID", "status", "jobName", "filename"));
         for (int i = 1; i <= MAX_NGRAM; i++){
-            colNames.add("wordCountNgram_" + String.valueOf(i));
+            colNames.add("wordCountNgram_" + i);
         }
         DataFrame dataFrame = new DataFrame(colNames, res);
-        dataFrame = flakyStateAll(dataFrame, res, colNames);
-
+        flakyStateAll(dataFrame, colNames);
+        dataFrame.resetIndex();
         return dataFrame;
     }
-    //
-    // public static void main(String[] args) throws ParseException {
-    //     // getLogData("2017_12_07_20_52_40_43660456_510f40d71448f7b8df18df1c2c3520787fcdadc5_0_portablesourcepackaging-processed.csv", "dataset/graphviz_extracted/");
-    //     getData("output/");
-    // }
+
 }

@@ -1,14 +1,21 @@
 package core;
 
+import base.DataFrame;
 import base.Experiment;
+import ml.dmlc.xgboost4j.java.XGBoostError;
+import preprocessing.GetData;
+import preprocessing.SubSets;
+import preprocessing.Vectorization;
 import tool.PickCall;
 import org.apache.commons.cli.*;
 import tool.File;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.lang.reflect.InvocationTargetException;
+import java.util.*;
 
+import static classification.Baseline.baseline;
+import static classification.ClassificationXGBoost.classifyXGBoost;
+import static tool.PickCall.runAndSerialize;
 import static tool.Timer.durationTimeFormat;
 
 /**
@@ -28,19 +35,12 @@ public class MainProcess {
         // pathExperiment is the name of the folder that will contain the pickles of the experiments.
         File.checkAndMkdir(pathExperiment);
     }
-    public static void main(String[] args) throws ParseException {
-        // common.Experiment experiment = extractArgs(args);
-        // System.out.println(experiment.toString());
-        //
-        // if (_10fold){
-        //     crossValidation_10();
-        // }else {
-        //     crossValidation();
-        // }
 
-        Experiment experiment = new Experiment("sss", "sss", extraToNumList("[87,456]"), false, "fef", 200, 10, 20);
-        File.checkAndMkdir(experiment.pathExp);
-        PickCall.serialize(experiment, "test.txt");
+    public static void main(String[] args) throws Exception {
+        // Experiment experiment = extractArgs(args);
+        Experiment experiment = new Experiment("/home/insight/Projects/gitSpace/insight-brownbuild-for-java/dataset/graphviz_extracted/", "default", new ArrayList<>(Arrays.asList(2)), true, "Train", 300, 70, 10);
+        recompute = true;
+        crossValidation(experiment);
     }
 
     public static Experiment extractArgs(String[] args){
@@ -95,11 +95,46 @@ public class MainProcess {
         }
         return res;
     }
-    public static void crossValidation(Experiment experiment){
+    public static void crossValidation(Experiment experiment) throws Exception {
         long start = System.currentTimeMillis();
-        System.out.println("run crossValidation");
-        System.out.println("\n\nDone:" + experiment.pathData);
-        System.out.println("--- " + durationTimeFormat(System.currentTimeMillis() - start) + "--- ");
+
+        Object[] args = new Object[]{experiment.pathData};
+        DataFrame data = runAndSerialize(GetData.class, GetData.class.getMethod("getData", String.class), args, experiment.pathExp + "data.p", recompute);
+
+        args = new Object[]{experiment, data};
+        Map<String, DataFrame> sets = runAndSerialize(SubSets.class, SubSets.class.getMethod("subSets", Experiment.class, DataFrame.class), args, experiment.pathExp + "sets.p", recompute);
+
+        args = new Object[]{experiment, sets};
+        Map<String, Map<String, Object>> vectors = runAndSerialize(Vectorization.class, Vectorization.class.getMethod("vectorization", Experiment.class, Map.class), args, experiment.pathExp + "vectors.p", recompute);
+
+        Map<String, Map<String, Double>> baselines = baseline(data);
+        Map<String, Map<String, Object>> big = classifyXGBoost(vectors);
+        String id = String.format("%.1fvar_%dtresh", (float) experiment.beta, experiment.alpha);
+        Map<String, Double> interest = (Map<String, Double>) big.get(id).get("result");
+
+        printResults(baselines, interest);
+        System.out.println("===== TOTAL TIME: " + durationTimeFormat(System.currentTimeMillis() - start) + " =====");
+    }
+    private static void printResults(Map<String, Map<String, Double>> baselines, Map<String, Double> interest) {
+        String[] want = Arrays.asList("f1", "precision", "recall", "specificity").toArray(new String[0]);
+
+        Object[] list = Arrays.asList("Run", "F1-Score", "Precision", "Recall", "Specificity").toArray();
+        System.out.println(String.format("%-12s | %-12s %-12s %-12s %-12s |", list));
+        System.out.println(String.join("", Collections.nCopies(68, "-")));
+
+        for (String baseKey : baselines.keySet()) {
+            list[0] = baseKey.toUpperCase();
+            for (int i = 0; i < want.length; i++) {
+                list[i+1] = String.valueOf(Math.round(100 * baselines.get(baseKey).get(want[i])));
+            }
+            System.out.println(String.format("%-12s | %-12s %-12s %-12s %-12s |", list));
+        }
+
+        list[0] = "XGB";
+        for (int i = 0; i < want.length; i++) {
+            list[i+1] = String.valueOf(Math.round(100 * interest.get(want[i])));
+        }
+        System.out.println(String.format("%-12s | %-12s %-12s %-12s %-12s |", list));
     }
     public static void crossValidation_10(Experiment experiment){
         long start = System.currentTimeMillis();

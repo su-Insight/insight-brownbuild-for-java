@@ -2,7 +2,9 @@ package tool;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -26,25 +28,36 @@ public class File {
             throw new RuntimeException(e);
         }
     }
-    public static String getFileContent(String filePath){
-        StringBuilder content = new StringBuilder();
+    public static void checkAndTouch(String filePath){
         try {
-            // 创建一个 BufferedReader 对象来读取文件
-            BufferedReader reader = new BufferedReader(new FileReader(filePath));
-            // 读取文件内容并存储到字符串中
-            String line;
-            while ((line = reader.readLine()) != null) {
-                content.append(line).append("\n"); // 逐行添加到StringBuilder
+            Path path = Paths.get(filePath);
+            if (!Files.exists(path)){
+                Files.createFile(path);
             }
-            // 关闭文件流
-            reader.close();
-        } catch (Exception e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        return content.toString();
+    }
+    public static StringBuffer getFileContent(String filePath){
+        StringBuffer content = new StringBuffer();
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                content.append(line).append("\n");
+            }
+            reader.close();
+        } catch (IOException e) {
+            throw new RuntimeException("Read file error. ：" + filePath, e);
+        }
+        return content;
     }
 
     public static List<String> getPathFiles(String pathIn){
-        return Arrays.asList(Objects.requireNonNull(new java.io.File(pathIn).list()));
+        try {
+            return Arrays.asList(Objects.requireNonNull(new java.io.File(pathIn).list()));
+        } catch (NullPointerException e) {
+            throw new InvalidPathException(pathIn, "PathData is error, the file list is empty.");
+        }
+
     }
 }
