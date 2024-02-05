@@ -172,10 +172,13 @@ public class MainExtract {
         return retString;
     }
     public synchronized static int upProgress(long completedFile, long totalFile, int percentage){
-        if (percentage == (int) (completedFile * 100 / totalFile)){
+        return upProgress(completedFile, totalFile, percentage, 0, 100);
+    }
+    public synchronized static int upProgress(long completedFile, long totalFile, int percentage, int start, int end) {
+        if (percentage == (int) Math.round(completedFile * 1.0 * (end - start) / totalFile + start)){
             return percentage;
         }else {
-            percentage = (int) (completedFile * 100 / totalFile);
+            percentage = (int) Math.round(completedFile * 1.0 * (end - start) / totalFile + start);
             System.out.print("[");
             for (int i = 1; i <= percentage; i+=2) {
                 System.out.print("█");
@@ -185,7 +188,7 @@ public class MainExtract {
             }
             System.out.print("]  " + percentage + "%   \r");
             if (percentage == 100) {
-                return -1;
+                System.out.println();
             }
             return percentage;
         }
