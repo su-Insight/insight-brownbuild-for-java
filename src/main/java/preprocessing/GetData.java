@@ -4,13 +4,25 @@ import base.DataFrame;
 import base.Group;
 import base.Row;
 import base.Title;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
+import org.apache.commons.csv.CSVRecord;
+import scala.tools.nsc.doc.html.page.JSONObject;
 
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Reader;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.StreamSupport;
 
 import static base.DataFrame.getGroupedAverage;
 import static core.MainExtract.upProgress;
@@ -48,9 +60,10 @@ public class GetData {
 
         separateText = separateText.subList(0, Math.min(separateText.size(), MAX_NGRAM));
 
-        Map<Integer, Map<String, Integer>> dic = new HashMap<>(MAX_NGRAM);
+        Map<Integer, Map<String, Integer>> dic = new HashMap<>(Math.min(separateText.size(), MAX_NGRAM));
         int count = 0;
         for (String txt : separateText){
+
             Map<String, Integer> loc = new HashMap<>();
             for (String line : txt.split("\n")){
                 String[] rows = line.split(",");
@@ -70,25 +83,37 @@ public class GetData {
      * @Return Returns a list representation of the job given in the file with filename 'file' at the path 'pathData'.
      * @Since version 1.0
      */
-    public static Row getLogData(String fileName, String pathData) throws ParseException {
-        Pattern pattern = Pattern.compile(fileRegex);
-        Matcher matcher = pattern.matcher(fileName);
-        Row loc = new Row();
-        if (matcher.find()){
-            Map<Integer, Map<String, Integer>> word_count = getTextCount(pathData + fileName);
-            Date date = new SimpleDateFormat(dateRegex).parse(matcher.group(2));
-            loc.add(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(date));    // date
-            loc.add(matcher.group(3));  // jobID
-            loc.add(matcher.group(4));  // commitID
-            loc.add(Integer.parseInt(matcher.group(5)));  // status
-            loc.add(matcher.group(7));  // jobName
-            loc.add(pathData + fileName);
-            for (int i = 0; i < word_count.size(); i++){
-                loc.add(word_count.get(i));
-            }
-            return loc;
+    public static void getLogData(List<String> fileNames, String pathData) throws ParseException, IOException {
+        Pattern pattern =  Pattern.compile(fileRegex);
+        FileWriter writer = new FileWriter("data.csv");
+        long total = fileNames.size();
+
+        String[] header = new String[6 + MAX_NGRAM];
+        int k = 0;
+        for (String name : Arrays.asList("date", "jobID", "commitID", "status", "jobName", "filename")) {
+            header[k++] = name;
         }
-        return null;
+        for (int i = 1; i <= MAX_NGRAM; i++){
+            header[k++] = "wordCountNgram_" + i;
+        };
+
+        k = 0;
+        CSVPrinter csvPrinter = new CSVPrinter(writer, CSVFormat.DEFAULT.withHeader(header));
+        Matcher matcher;
+        for (String file : fileNames){
+            matcher = pattern.matcher(file);
+            if (matcher.find()){
+                Map<Integer, Map<String, Integer>> word_count = getTextCount(pathData + file);
+                Date date = new SimpleDateFormat(dateRegex).parse(matcher.group(2));
+                csvPrinter.printRecord(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(date),
+                        matcher.group(3), matcher.group(4), matcher.group(5), matcher.group(7),
+                        pathData + file, word_count.get(0), word_count.get(1));
+                // date jobID commitID status jobName wordCount(wordCountNgram_1 wordCountNgram_2)
+                percentage = upProgress(++k, total, percentage, 0, 50);
+            }
+        }
+        csvPrinter.flush();
+        csvPrinter.close();
     }
     /**
      * @Author Insight 
@@ -126,17 +151,18 @@ public class GetData {
 
         List<Integer> indexes = new ArrayList<>(groupByList.size());
         for (String column : groupByList){
-            indexes.add(colNames.indexOf(column) + 1);
+            indexes.add(colNames.indexOf(column));
         }
 
         List<Object> extractedList = null;
+        int k = 0;
         for (Row row : dataFrame.getColumnData()){
             extractedList = indexes.stream()
-                    .map(position -> row.get(position - 1)) // 索引从1开始
+                    .map(row::get) // 索引从1开始
                     .collect(Collectors.toList());
             allFlakyStateRes.add(computeJobFlakyState.get(extractedList));
+            // percentage = upProgress(k++, dataFrame.getColumnData().size(), percentage, 66, 100);
         }
-
         dataFrame.addColumn("flaky", allFlakyStateRes);
     }
     /**
@@ -147,29 +173,31 @@ public class GetData {
      * @Return dataset in a pandas dataframe format.
      * @Since version 1.0
      */
-    public static DataFrame getData(String pathData) throws ParseException {
-        List<Row> res = new ArrayList<>();
+    public static DataFrame getData(String pathData) throws ParseException, IOException {
         List<String> logFiles = getPathFiles(pathData).stream().sorted().collect(Collectors.toList());
-        Pattern pattern = Pattern.compile(fileRegex);
-        long total = logFiles.size();
-        int index = 0;
-        for (String file : logFiles){
-            if (pattern.matcher(file).find()){
-                percentage = upProgress(++index, total, percentage);
-                Row line = getLogData(file, pathData);
-                res.add(line);
-            }
-        }
 
+        getLogData(logFiles, pathData);
+
+        Reader in = new FileReader("data.csv");
+        Iterable<CSVRecord> records = CSVFormat.DEFAULT.parse(in);
         Title colNames = new Title();
-        colNames.addAll(Arrays.asList("date", "jobID", "commitID", "status", "jobName", "filename"));
-        for (int i = 1; i <= MAX_NGRAM; i++){
-            colNames.add("wordCountNgram_" + i);
-        }
-        DataFrame dataFrame = new DataFrame(colNames, res);
-        flakyStateAll(dataFrame, colNames);
-        dataFrame.resetIndex();
-        return dataFrame;
+        colNames.addAll(records.iterator().next().toList());
+
+        AtomicInteger ind = new AtomicInteger();
+        List<Row> res = StreamSupport.stream(records.spliterator(), false)
+                .map(record -> {
+                    percentage = upProgress(ind.getAndIncrement(), logFiles.size(), percentage, 50, 100);
+                    return new Row(
+                            IntStream.range(0, colNames.size())
+                                    .mapToObj(record::get)
+                                    .collect(Collectors.toList())
+                    );
+                })
+                .collect(Collectors.toList());
+
+        DataFrame data = new DataFrame(colNames, res);
+        flakyStateAll(data, colNames);
+        return data.resetIndex();
     }
 
 }

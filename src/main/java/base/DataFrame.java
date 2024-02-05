@@ -2,6 +2,7 @@ package base;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
+import org.apache.commons.csv.CSVRecord;
 import preprocessing.GetData;
 
 import java.io.IOException;
@@ -151,9 +152,9 @@ public class DataFrame implements Serializable {
     }
     public void addColumn(String colName, List<Object> colData, int index) {
         columnNames.add(index, colName);
-        final boolean NULL = columnData.isEmpty();
+        final boolean IS_NULL = columnData.isEmpty();
         for (int i = 0; i < colData.size(); i++){
-            if (NULL) columnData.add(new Row());
+            if (IS_NULL) columnData.add(new Row());
             columnData.get(i).add(index, colData.get(i));
         }
     }
@@ -174,7 +175,7 @@ public class DataFrame implements Serializable {
         columnData.sort(Comparator.comparing(row -> row.get(index).toString()));
     }
 
-    public void replaceDataWithShuffle(List<Row> res1, List<Row> res2){
+    public void mergeDataWithShuffle(List<Row> res1, List<Row> res2){
         List<Row> res = new ArrayList<>();
         res.addAll(res1);
         res.addAll(res2);
@@ -278,7 +279,7 @@ public class DataFrame implements Serializable {
         Map<Group, Float> res = new HashMap<>();
         int index = colNames.indexOf(colName);
         groupedData.forEach((group, dataList) -> {
-            Float average = (float)dataList.stream().mapToDouble(list -> ((Number) list.get(index)).doubleValue()).average().getAsDouble();
+            Float average = (float)dataList.stream().mapToDouble(list -> (Double.parseDouble(String.valueOf(list.get(index))))).average().getAsDouble();
             res.put(group, average);
         });
         return res;
@@ -303,9 +304,7 @@ public class DataFrame implements Serializable {
             if (groupedData.containsKey(groupBys)){
                 groupedData.get(groupBys).add(row);
             }else {
-                List<Row> list = new ArrayList<>();
-                list.add(row);
-                groupedData.put(groupBys, list);
+                groupedData.put(groupBys, new ArrayList<>(Collections.singleton(row)));
             }
         }
         return groupedData;
